@@ -14,7 +14,7 @@ function SimilaritySearch.evaluate(::NormCostDist, u::T, v) where T
 end
 
 function eval_queries!(dist::SemiMetric, KNN::Vector{KnnResult}, Q::AbstractDatabase, X::AbstractDatabase, r)
-    Threads.@threads for qID in eachindex(Q)
+    Threads.@threads :static for qID in eachindex(Q)
         q = Q[qID]
         for (i, objID) in enumerate(r)
             d = SimilaritySearch.evaluate(dist, q, X[i])
@@ -31,7 +31,7 @@ function normalize_vectors!(FloatType, X)
     end
     =#
 
-    MatrixDatabase(X_)
+    StrideMatrixDatabase(X_)
 end
 
 """
@@ -81,19 +81,38 @@ function compute_knns(::Type{FT}, dbname::String, Q, dist::SemiMetric, k::Intege
     knns, dists
 end
 
-function main(; qname="data2024/public-queries-2024-laion2B-en-clip768v2-n=10k.h5", k=1000, s=10^5)
-    #dist = NormalizedCosineDistance()
-    dist = NormCostDist()
+function compute_gold(;
+        qname,
+        dbname,
+        outname, # "data2024/gold-standard-dbsize=$size--" * basename(qname)
+        k, s=10^5)
+
+    dist = NormalizedCosineDistance()
+    #dist = NormCostDist()
     FloatType = Float32
 
-    for sizename in ["300K", "1M", "10M", "100M"]
-        dbname = "data2024/laion2B-en-clip768v2-n=$sizename.h5"
-        outname = "data2024/gold-standard-dbsize=$sizename--" * basename(qname)
-        if isfile(outname)
-            @info "found $outname, skipping to the next setup"
-        else
-            @info "start $(Dates.now()) $outname"
-            gold_standard(FloatType, dist; dbname, qname, s, k, outname)
-        end
+    if isfile(outname)
+        @info "found $outname, skipping to the next setup"
+    else
+        @info "start $(Dates.now()) $outname"
+        gold_standard(FloatType, dist; dbname, qname, s, k, outname)
     end
+end
+
+
+function main_10M()
+    qname = "data2024/private-queries-2024-raw-n=12500-epsilon=0.2.h5"
+    dbname = "data2024/laion2B-en-clip768v2-n=10M.h5"
+    outname = "data2024/gold-standard-dbsize=10M--raw-private-queries-2024-laion2B-en-clip768v2-n=12500.h5"
+
+    compute_gold(; qname, dbname, outname, k=1000)
+end
+
+function main_100M()
+    size = "100M"
+    qname = "data2024/private-queries-2024-raw-n=12500-epsilon=0.2.h5"
+    dbname = "data2024/laion2B-en-clip768v2-n=$size.h5"
+    outname = "data2024/gold-standard-dbsize=$size--raw-private-queries-2024-laion2B-en-clip768v2-n=12500.h5"
+
+    compute_gold(; qname, dbname, outname, k=1000)
 end
